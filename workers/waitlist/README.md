@@ -145,7 +145,7 @@ Draft policy: collect only the email address; no analytics, cookies, tracking, o
 
 This Worker persists `id`, normalized `email`, and `created_at` only. The policy placeholders `[[HOSTING PROVIDER]]` and `[[EMAIL / WAITLIST PROVIDER]]` would both be **Cloudflare** (Workers + D1) if this ships.
 
-Workers Logs are enabled for application `console` events only (`invocation_logs` is `false`) so Cloudflare does not persist request/header metadata by default. Application code logs `{ event: "server_error", name }` on unexpected failures — never email, IP, or the exception message. Traces are sampled at 1%. If traces still conflict with the published policy, disable observability before launch.
+Observability is locked down to match the policy’s “no tracking” line. Traces are off (`traces.enabled` / `persist` false) in production and preview. Invocation logs and Issues are off. The only application log is `console.error` of `{event:"server_error", name}` on unexpected failures — never email, IP, headers, or the exception message. Cloudflare may still keep its own edge operational metrics outside this Worker; this config does not send request metadata from the Worker.
 
 ## Tests
 

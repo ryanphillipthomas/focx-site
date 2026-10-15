@@ -6,8 +6,19 @@
   "workers_dev": true,
   "observability": {
     "enabled": true,
-    "logs": { "enabled": true, "invocation_logs": false, "head_sampling_rate": 1 },
-    "traces": { "enabled": true, "head_sampling_rate": 0.01 }
+    "issues": { "enabled": false },
+    "logs": {
+      "enabled": true,
+      "invocation_logs": false,
+      "head_sampling_rate": 1,
+      "destinations": []
+    },
+    "traces": {
+      "enabled": false,
+      "persist": false,
+      "head_sampling_rate": 0,
+      "destinations": []
+    }
   },
   "vars": {
     // Production allowlist is hardcoded in the Worker (https://focx.ai, https://www.focx.ai).
@@ -44,6 +55,22 @@
     "preview": {
       "name": "focx-waitlist-preview",
       "workers_dev": true,
+      "observability": {
+        "enabled": true,
+        "issues": { "enabled": false },
+        "logs": {
+          "enabled": true,
+          "invocation_logs": false,
+          "head_sampling_rate": 1,
+          "destinations": []
+        },
+        "traces": {
+          "enabled": false,
+          "persist": false,
+          "head_sampling_rate": 0,
+          "destinations": []
+        }
+      },
       "vars": {
         // Configurable allowlist: comma-separated exact origins and/or fully
         // anchored regexes. Localhost is preview/dev only — never copy these
