@@ -57,6 +57,10 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 a {
   color: inherit;
 }
@@ -142,6 +146,7 @@ input:focus-visible {
 
 .stage {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 32px 0;
