@@ -81,11 +81,9 @@
         {
           "binding": "DB",
           "database_name": "focx-waitlist-preview",
-          // PLACEHOLDER — replace after `wrangler d1 create focx-waitlist-preview`.
-          "database_id": "00000000-0000-4000-8000-000000000002",
-          // Named local id so wrangler dev --remote --env preview cannot fall
-          // back to a production database_id.
-          "preview_database_id": "local-focx-waitlist-preview",
+          "database_id": "360d26c7-6a63-4239-bb38-b881691ef5a1",
+          // Same id so wrangler dev --remote --env preview uses this D1, never prod.
+          "preview_database_id": "360d26c7-6a63-4239-bb38-b881691ef5a1",
           "migrations_dir": "migrations"
         }
       ],
