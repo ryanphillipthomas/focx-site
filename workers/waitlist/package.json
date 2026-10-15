@@ -1,0 +1,17 @@
+{
+  "name": "@focx/waitlist",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --env preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.json",
+    "cf-typegen": "wrangler types"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.4.3",
+    "typescript": "5.9.3",
+    "vitest": "4.1.12",
+    "wrangler": "4.151.0"
+  }
+}

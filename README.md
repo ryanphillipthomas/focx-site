@@ -6,6 +6,7 @@ Static umbrella for **focx.ai** — landing page plus path mounts (e.g. `/skills
 
 ```
 apps/site/              → focx.ai /
+workers/waitlist/       → Cloudflare Worker + D1 waitlist API (not deployed from this tree)
 tools/site-compose/     → copies apps/site + remote mounts into dist/
 render.yaml             → Render static site
 docs/connect-extract.md → Connect product extract notes (optional)
