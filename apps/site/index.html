@@ -1,20 +1,69 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Focx</title>
-<meta name="description" content="Ticket in, reviewed pull request out &mdash; every stage built by bots, merged only by a human.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Focx</title>
+  <meta name="description" content="We make AI tools and platforms to help you be a better human.">
+  <meta name="robots" content="noindex">
+  <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <main class="hero" data-figma-node="9:7">
-    <p class="eyebrow">Autonomous development pipeline</p>
-    <h1 class="wordmark">Focx</h1>
-    <p class="subheading">Ticket in, reviewed pull request out &mdash; every stage built by bots, merged only by a human.</p>
-    <a class="btn btn--primary btn--md btn--pill" href="/skills/connect/">Explore Connect</a>
-  </main>
+  <div class="page">
+    <header class="masthead">
+      <a class="brand" href="/">
+        <picture>
+          <source srcset="/wordmarks/focx-small-dark-ink.svg" media="(prefers-color-scheme: light)">
+          <img class="wordmark" src="/wordmarks/focx-small-light-ink.svg" alt="Focx" width="57" height="32">
+        </picture>
+        <span class="wordmark-text">Focx</span>
+      </a>
+    </header>
+
+    <main class="stage">
+      <div id="signup" class="panel">
+        <h1 class="headline">We make AI tools and platforms to help you be a better human.</h1>
+        <form id="waitlist-form" class="waitlist" novalidate>
+          <div class="form-row">
+            <label class="sr-only" for="email">Email</label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              inputmode="email"
+              autocomplete="email"
+              autocapitalize="off"
+              spellcheck="false"
+              placeholder="you@example.com"
+              maxlength="254"
+            >
+            <input
+              id="website"
+              name="website"
+              type="text"
+              class="hp"
+              tabindex="-1"
+              autocomplete="off"
+              aria-hidden="true"
+            >
+            <button id="waitlist-submit" type="submit">Join the waitlist</button>
+          </div>
+          <p id="email-error" class="form-error" role="alert" aria-live="polite" aria-atomic="true"></p>
+        </form>
+        <p class="privacy">We'll email you once, when there's something real to try. Unsubscribe anytime. See our <a href="/privacy">Privacy Policy</a>.</p>
+      </div>
+
+      <div id="confirm" class="panel" hidden>
+        <h1 id="confirm-headline" class="headline" tabindex="-1">You're on the list.</h1>
+        <p class="confirm-body">We'll email you once, when there's something real to try.</p>
+      </div>
+    </main>
+
+    <footer class="colophon">
+      <p>© 2026 · by ryanthomas.ai</p>
+    </footer>
+  </div>
+  <script src="/waitlist-config.js"></script>
+  <script src="/waitlist.js"></script>
 </body>
 </html>
