@@ -42,13 +42,13 @@ Production also allows exactly `https://focx.ai` and `https://www.focx.ai`.
 
 `EXTRA_ALLOWED_ORIGINS` is a comma-separated env var of extra exact origins and/or **fully anchored** regexes (`^…$`). Regexes are compiled once per distinct env value and must match the entire origin. Request `Origin` is never compiled as a regex.
 
-Preview default:
+Preview default (exact origins, no regex):
 
 ```
-^https://focx-site-preview(-[a-z0-9]+)?-pr-[0-9]+\.onrender\.com$,http://localhost:8123,http://127.0.0.1:8123
+https://focx-waitlist-preview.onrender.com,http://localhost:8123,http://127.0.0.1:8123
 ```
 
-Localhost entries belong only in preview/dev. Never put them in the production allowlist.
+The matcher still accepts fully anchored regex entries in `EXTRA_ALLOWED_ORIGINS` if Platform adds one later. Localhost entries belong only in preview/dev. Never put them in the production allowlist.
 
 CORS headers: `POST` and `OPTIONS` only. No `Access-Control-Allow-Credentials`.
 
@@ -65,24 +65,34 @@ The Rate Limiting binding docs and GA announcement do not mark it paid-only (unl
 | Worker name | `focx-waitlist` | `focx-waitlist-preview` |
 | `workers_dev` | `true` | `true` |
 | D1 | `focx-waitlist` (placeholder id) | `focx-waitlist-preview` (placeholder id) |
-| Extra origins | empty (focx.ai + www only) | Render preview regex + localhost:8123 |
+| Extra origins | empty (focx.ai + www only) | `https://focx-waitlist-preview.onrender.com` + localhost:8123 |
 | Routes | commented out (`focx.ai/api/waitlist*`) | none, and none should be added |
 
 `preview_database_id` is set on the production D1 binding so `wrangler dev --remote` uses the preview database, not prod. The preview env uses a named local `preview_database_id` (`local-focx-waitlist-preview`).
 
 **Version URLs from `wrangler versions upload` reuse the deployed Worker's bindings** ([Version URLs](https://developers.cloudflare.com/workers/versions-and-deployments/version-urls/), [Compare workflows](https://developers.cloudflare.com/workers/previews/compare-workflows/)). A Version URL is an uploaded version of that Worker with that Worker's production resources — it does not isolate D1.
 
-Deploy previews only to the preview env:
+## Preview deploy (Platform, scoped token)
 
-```bash
-npx wrangler deploy --env preview
-```
+Do this in order from `workers/waitlist/`. Use a token scoped to the preview Worker and the `focx-waitlist-preview` D1 database. Do not point this token at production.
 
-Top-level `wrangler deploy` (production) should pass `--env=""` so Wrangler does not guess an environment. Never use `wrangler versions upload` on `focx-waitlist` for a preview.
+Config: `workers/waitlist/wrangler.jsonc`  
+Migration: `workers/waitlist/migrations/0001_create_waitlist.sql`
 
-Never run `wrangler versions upload` (or `wrangler deploy`) against the production Worker for a preview. That would share the production D1 table.
+1. `cd workers/waitlist`
+2. `npx wrangler d1 create focx-waitlist-preview`
+3. Put the printed database id into `wrangler.jsonc`:
+   - `env.preview.d1_databases[0].database_id`
+   - top-level `d1_databases[0].preview_database_id` (so `wrangler dev --remote` never hits prod)
+4. `npx wrangler d1 migrations apply focx-waitlist-preview --remote --env preview`  
+   Applies `workers/waitlist/migrations/0001_create_waitlist.sql` to the preview database only.
+5. `npx wrangler deploy --env preview`
 
-Previews stay on `*.workers.dev`. No route or custom domain on the focx.ai zone for preview.
+`workers_dev` is `true` on preview. Do not add a route or custom domain on the focx.ai zone.
+
+Never `wrangler versions upload` or `wrangler deploy` (without `--env preview`) on the production Worker for a preview. Version URLs reuse that Worker's bindings and would write to the production table.
+
+Top-level production deploys, when Ryan approves them, should pass `--env=""` so Wrangler does not guess an environment.
 
 The production route `focx.ai/api/waitlist*` stays commented out. focx.ai is proxied through Cloudflare, so enabling that route would answer even while the page origin is suspended. Uncomment it only in the launch PR Ryan approves.
 
@@ -124,7 +134,7 @@ Only after Ryan approves a launch PR:
 1. Confirm placeholder `database_id` / `preview_database_id` values were replaced.
 2. Confirm production `EXTRA_ALLOWED_ORIGINS` is empty and does not include localhost.
 3. Deploy preview first: `npx wrangler deploy --env preview` (never `versions upload` on prod).
-4. Smoke-test the workers.dev preview URL from an allowed Render preview origin.
+4. Smoke-test the workers.dev preview URL from `https://focx-waitlist-preview.onrender.com`.
 5. Apply production D1 migrations.
 6. Deploy production: `npx wrangler deploy` (still without the focx.ai route until the launch PR).
 7. In the launch PR only: uncomment `routes` for `focx.ai/api/waitlist*` and deploy.
@@ -135,7 +145,7 @@ Draft policy: collect only the email address; no analytics, cookies, tracking, o
 
 This Worker persists `id`, normalized `email`, and `created_at` only. The policy placeholders `[[HOSTING PROVIDER]]` and `[[EMAIL / WAITLIST PROVIDER]]` would both be **Cloudflare** (Workers + D1) if this ships.
 
-Workers Logs / traces are enabled for operational debugging. Application code does not write email, IP, or other request identifiers to `console`. Platform request logs may still record edge metadata (for example connecting IP). If that conflicts with the published policy, disable observability before launch.
+Workers Logs are enabled for application `console` events only (`invocation_logs` is `false`) so Cloudflare does not persist request/header metadata by default. Application code logs `{ event: "server_error", name }` on unexpected failures — never email, IP, or the exception message. Traces are sampled at 1%. If traces still conflict with the published policy, disable observability before launch.
 
 ## Tests
 

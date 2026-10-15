@@ -1,6 +1,6 @@
 import { normalizeEmail } from "./email";
 import { compileAllowlist, originAllowed } from "./origin";
-import { corsHeaders, errorResponse, methodNotAllowed, okResponse } from "./respond";
+import { corsHeaders, deniedOriginHeaders, errorResponse, methodNotAllowed, okResponse } from "./respond";
 
 const WAITLIST_PATH = "/api/waitlist";
 const MAX_BODY_BYTES = 1024;
@@ -19,7 +19,7 @@ function honeypotFilled(website: unknown): boolean {
     return false;
   }
   if (typeof website === "string") {
-    return website.trim() !== "";
+    return website !== "";
   }
   return true;
 }
@@ -33,26 +33,60 @@ function contentLengthExceedsLimit(request: Request): boolean {
   return Number.isFinite(length) && length > MAX_BODY_BYTES;
 }
 
-async function readJsonObject(
+async function readLimitedText(
   request: Request,
-): Promise<{ ok: true; value: Record<string, unknown> } | { ok: false; error: "too_large" | "bad_request" }> {
+): Promise<{ ok: true; text: string } | { ok: false; error: "too_large" | "bad_request" }> {
   if (contentLengthExceedsLimit(request)) {
     return { ok: false, error: "too_large" };
   }
+  if (request.body === null) {
+    return { ok: true, text: "" };
+  }
 
-  let buffer: ArrayBuffer;
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
   try {
-    buffer = await request.arrayBuffer();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      total += value.byteLength;
+      if (total > MAX_BODY_BYTES) {
+        await reader.cancel();
+        return { ok: false, error: "too_large" };
+      }
+      chunks.push(value);
+    }
   } catch {
     return { ok: false, error: "bad_request" };
   }
-  if (buffer.byteLength > MAX_BODY_BYTES) {
-    return { ok: false, error: "too_large" };
+
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    return { ok: true, text: new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(merged) };
+  } catch {
+    return { ok: false, error: "bad_request" };
+  }
+}
+
+async function readJsonObject(
+  request: Request,
+): Promise<{ ok: true; value: Record<string, unknown> } | { ok: false; error: "too_large" | "bad_request" }> {
+  const text = await readLimitedText(request);
+  if (!text.ok) {
+    return text;
   }
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(new TextDecoder().decode(buffer));
+    parsed = JSON.parse(text.text);
   } catch {
     return { ok: false, error: "bad_request" };
   }
@@ -93,7 +127,7 @@ export async function handleWaitlist(request: Request, env: WaitlistEnv): Promis
     const rules = compileAllowlist(env.EXTRA_ALLOWED_ORIGINS);
     const allowed = originAllowed({ origin, requestUrl: url, rules });
     if (!allowed) {
-      return errorResponse("forbidden_origin", corsHeaders(origin));
+      return errorResponse("forbidden_origin", deniedOriginHeaders());
     }
 
     cors = corsHeaders(origin);
@@ -128,7 +162,9 @@ export async function handleWaitlist(request: Request, env: WaitlistEnv): Promis
 
     await env.DB.prepare(INSERT_SQL).bind(email).run();
     return okResponse(cors);
-  } catch {
+  } catch (error) {
+    const name = error instanceof Error ? error.name : "unknown";
+    console.error(JSON.stringify({ event: "server_error", name }));
     return errorResponse("server_error", cors);
   }
 }

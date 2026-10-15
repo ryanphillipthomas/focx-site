@@ -49,6 +49,10 @@ export function methodNotAllowed(extraHeaders: HeadersInit = {}): Response {
   return jsonResponse({ ok: false }, 405, headers);
 }
 
+export function deniedOriginHeaders(): HeadersInit {
+  return { Vary: "Origin" };
+}
+
 export function corsHeaders(origin: string | null): HeadersInit {
   if (origin === null || origin === "") {
     return { Vary: "Origin" };

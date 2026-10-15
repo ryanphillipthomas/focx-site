@@ -8,6 +8,7 @@ export const PRODUCTION_ORIGINS = [
 ] as const;
 
 const MAX_ORIGIN_LENGTH = 256;
+const MAX_REGEX_SOURCE_LENGTH = 256;
 
 type CompiledAllowlist = {
   readonly source: string;
@@ -15,6 +16,24 @@ type CompiledAllowlist = {
 };
 
 let compiled: CompiledAllowlist | null = null;
+
+function compileAnchoredRegex(entry: string): RegExp | null {
+  if (!entry.startsWith("^") || !entry.endsWith("$")) {
+    return null;
+  }
+  if (entry.length > MAX_REGEX_SOURCE_LENGTH) {
+    return null;
+  }
+  const inner = entry.slice(1, -1);
+  if (inner.length === 0) {
+    return null;
+  }
+  try {
+    return new RegExp(`^(?:${inner})$`);
+  } catch {
+    return null;
+  }
+}
 
 export function compileAllowlist(extraAllowedOrigins: string | undefined): readonly OriginRule[] {
   const source = extraAllowedOrigins ?? "";
@@ -33,10 +52,9 @@ export function compileAllowlist(extraAllowedOrigins: string | undefined): reado
       continue;
     }
     if (entry.startsWith("^") && entry.endsWith("$")) {
-      try {
-        rules.push({ kind: "regex", pattern: new RegExp(entry) });
-      } catch {
-        continue;
+      const pattern = compileAnchoredRegex(entry);
+      if (pattern !== null) {
+        rules.push({ kind: "regex", pattern });
       }
       continue;
     }
@@ -63,11 +81,21 @@ export function originAllowed(params: {
     return true;
   }
   for (const rule of rules) {
-    if (rule.kind === "exact" && rule.origin === origin) {
-      return true;
-    }
-    if (rule.kind === "regex" && rule.pattern.test(origin)) {
-      return true;
+    switch (rule.kind) {
+      case "exact":
+        if (rule.origin === origin) {
+          return true;
+        }
+        break;
+      case "regex":
+        if (rule.pattern.test(origin)) {
+          return true;
+        }
+        break;
+      default: {
+        const _exhaustive: never = rule;
+        return _exhaustive;
+      }
     }
   }
   return false;

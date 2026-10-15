@@ -4,8 +4,10 @@ import { handleWaitlist } from "../src/index";
 
 const WORKER_ORIGIN = "https://focx-waitlist-preview.example.workers.dev";
 const WAITLIST_URL = `${WORKER_ORIGIN}/api/waitlist`;
-const PREVIEW_ORIGIN = "https://focx-site-preview-pr-12.onrender.com";
-const PREVIEW_SUFFIX_ORIGIN = "https://focx-site-preview-ab12cd-pr-99.onrender.com";
+const PREVIEW_ORIGIN = "https://focx-waitlist-preview.onrender.com";
+const PREVIEW_LOOKALIKE = "https://focx-waitlist-preview.onrender.com.evil.com";
+const SITE_PREVIEW_REGEX =
+  "^https://focx-site-preview(-[a-z0-9]+)?-pr-[0-9]+\\.onrender\\.com$";
 
 type JoinOptions = {
   origin?: string | null;
@@ -107,6 +109,21 @@ describe("POST /api/waitlist", () => {
     expect(response.status).toBe(200);
     expect(await jsonOf(response)).toEqual({ ok: true });
     expect(await rowCount("bot@example.com")).toBe(0);
+
+    const spaces = await exports.default.fetch(
+      join({
+        body: JSON.stringify({ email: "spaces@example.com", website: " " }),
+      }),
+    );
+    expect(spaces.status).toBe(200);
+    expect(await jsonOf(spaces)).toEqual({ ok: true });
+    expect(await rowCount("spaces@example.com")).toBe(0);
+  });
+
+  it("returns 404 not_found for an unknown path", async () => {
+    const response = await exports.default.fetch(join({ url: `${WORKER_ORIGIN}/api/other`, body: null }));
+    expect(response.status).toBe(404);
+    expect(await jsonOf(response)).toEqual({ ok: false, error: "not_found" });
   });
 
   it("rejects a body over 1 KB with 413 too_large", async () => {
@@ -171,12 +188,34 @@ describe("POST /api/waitlist", () => {
     expect(await jsonOf(noOrigin)).toEqual({ ok: true });
   });
 
-  it("allows production and preview origins, including the suffix form", async () => {
+  it("allows the exact preview origin and rejects a lookalike host", async () => {
+    const allowed = await exports.default.fetch(
+      join({
+        origin: PREVIEW_ORIGIN,
+        body: JSON.stringify({ email: "exact-preview@example.com" }),
+      }),
+    );
+    expect(allowed.status).toBe(200);
+    expect(await jsonOf(allowed)).toEqual({ ok: true });
+    expect(allowed.headers.get("Access-Control-Allow-Origin")).toBe(PREVIEW_ORIGIN);
+
+    const lookalike = await exports.default.fetch(
+      join({
+        origin: PREVIEW_LOOKALIKE,
+        body: JSON.stringify({ email: "lookalike@example.com" }),
+      }),
+    );
+    expect(lookalike.status).toBe(403);
+    expect(await jsonOf(lookalike)).toEqual({ ok: false, error: "forbidden_origin" });
+    expect(lookalike.headers.get("Access-Control-Allow-Origin")).toBeNull();
+    expect(await rowCount("lookalike@example.com")).toBe(0);
+  });
+
+  it("allows production and preview localhost origins", async () => {
     for (const origin of [
       "https://focx.ai",
       "https://www.focx.ai",
       PREVIEW_ORIGIN,
-      PREVIEW_SUFFIX_ORIGIN,
       "http://localhost:8123",
       "http://127.0.0.1:8123",
     ]) {
@@ -194,7 +233,7 @@ describe("POST /api/waitlist", () => {
   it("treats EXTRA_ALLOWED_ORIGINS regexes as configurable and anchored", async () => {
     const customEnv = {
       ...env,
-      EXTRA_ALLOWED_ORIGINS: "^https://custom-preview-[a-z0-9]+\\.example\\.com$",
+      EXTRA_ALLOWED_ORIGINS: `^https://custom-preview-[a-z0-9]+\\.example\\.com$,${SITE_PREVIEW_REGEX}`,
     };
     const allowed = await handleWaitlist(
       join({
@@ -215,7 +254,62 @@ describe("POST /api/waitlist", () => {
     );
     expect(nearMiss.status).toBe(403);
     expect(await jsonOf(nearMiss)).toEqual({ ok: false, error: "forbidden_origin" });
+    expect(nearMiss.headers.get("Access-Control-Allow-Origin")).toBeNull();
     expect(await rowCount("custom-deny@example.com")).toBe(0);
+
+    const alternationEnv = {
+      ...env,
+      EXTRA_ALLOWED_ORIGINS: "^https://safe.example|https://other.example$",
+    };
+    const prefixBypass = await handleWaitlist(
+      join({
+        origin: "https://safe.example.evil.com",
+        body: JSON.stringify({ email: "alt-deny@example.com" }),
+      }),
+      alternationEnv,
+    );
+    expect(prefixBypass.status).toBe(403);
+    expect(await rowCount("alt-deny@example.com")).toBe(0);
+
+    const fullAlt = await handleWaitlist(
+      join({
+        origin: "https://safe.example",
+        body: JSON.stringify({ email: "alt-allow@example.com" }),
+      }),
+      alternationEnv,
+    );
+    expect(fullAlt.status).toBe(200);
+    expect(await jsonOf(fullAlt)).toEqual({ ok: true });
+
+    const sitePreview = await handleWaitlist(
+      join({
+        origin: "https://focx-site-preview-pr-12.onrender.com",
+        body: JSON.stringify({ email: "site-preview@example.com" }),
+      }),
+      customEnv,
+    );
+    expect(sitePreview.status).toBe(200);
+    expect(await jsonOf(sitePreview)).toEqual({ ok: true });
+
+    const sitePreviewSuffix = await handleWaitlist(
+      join({
+        origin: "https://focx-site-preview-ab12cd-pr-99.onrender.com",
+        body: JSON.stringify({ email: "site-preview-suffix@example.com" }),
+      }),
+      customEnv,
+    );
+    expect(sitePreviewSuffix.status).toBe(200);
+    expect(await jsonOf(sitePreviewSuffix)).toEqual({ ok: true });
+
+    const sitePreviewNearMiss = await handleWaitlist(
+      join({
+        origin: "https://focx-site-preview-pr-12.onrender.com.evil.com",
+        body: JSON.stringify({ email: "site-preview-deny@example.com" }),
+      }),
+      customEnv,
+    );
+    expect(sitePreviewNearMiss.status).toBe(403);
+    expect(await rowCount("site-preview-deny@example.com")).toBe(0);
   });
 
   it("rejects disallowed and near-miss origins with 403 forbidden_origin", async () => {
@@ -231,6 +325,7 @@ describe("POST /api/waitlist", () => {
       "https://focx-site-preview-PR-12.onrender.com",
       "https://focx-site-preview-ab-cd-pr-1.onrender.com",
       "https://focx-pr-1.onrender.com",
+      PREVIEW_LOOKALIKE,
       "http://localhost:3000",
     ];
     for (const origin of blocked) {
@@ -239,6 +334,7 @@ describe("POST /api/waitlist", () => {
       );
       expect(response.status, origin).toBe(403);
       expect(await jsonOf(response)).toEqual({ ok: false, error: "forbidden_origin" });
+      expect(response.headers.get("Access-Control-Allow-Origin")).toBeNull();
       expect(await rowCount("blocked@example.com")).toBe(0);
     }
   });
